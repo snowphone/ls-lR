@@ -1,5 +1,5 @@
 /* Author: 문준오
- * TODO:	
+ * TODO: 
  */
 #include "myshell.h"
 
@@ -33,14 +33,14 @@ exit_normal:
 	return 0;
 }
 
+
 bool isBackground(char* commands[]) {
-	char** tokenIt = commands;
-	while(*tokenIt) {
+	char** tokenIt;
+	for(tokenIt = commands; *tokenIt; ++tokenIt) {
 		if(IS_SAME(*tokenIt, "&")) {
 			*tokenIt = 0;
 			return true;
 		}
-		tokenIt++;
 	}
 	return false;
 }
@@ -81,15 +81,57 @@ char** parseArgv(char* s) {
 
 char** readPrompt() {
 	static char buffer[BUFSIZ];
-	printf("$ ");
+	do{
+		printf("$ ");
+		fgets(buffer, BUFSIZ, stdin);
+	} while(!feof(stdin) && isEmpty(buffer));
 
-	fgets(buffer, BUFSIZ, stdin);
 	return feof(stdin) ? NULL :  _parseCommand(buffer);
+}
+
+void pullItem(char** dst, char** src) {
+	while( (*dst++ = *src++) ) {
+		/* Do nothing */;
+	}
+}
+
+void _handleRedirection(char* commands[]) {
+	char** it;
+	int oldfd, newfd;
+	for(it = commands; *it; ++it) {
+		char* p = strchr(*it, '>');
+		if(!p) p = strchr(*it, '<');
+		if(!p) continue;
+
+		if(IS_SAME(*it, "2>")){
+			newfd = STDERR_FILENO;
+			oldfd = creat(it[1], S_IRUSR|S_IWUSR);
+			pullItem(it, it + 2);
+			--it;
+		}
+		else if(*p == '>') {
+			newfd = STDOUT_FILENO;
+			oldfd = creat(it[1], S_IRUSR|S_IWUSR);
+			pullItem(it, it + 2);
+			--it;
+		}
+		else if(*p == '<') {
+			newfd = STDIN_FILENO;
+			oldfd = open(it[1], O_RDONLY, S_IRUSR|S_IWUSR);
+			pullItem(it, it + 2);
+			--it;
+		}
+		else assert(0 && "Invalid token");
+		dup2(oldfd, newfd);
+	}
 }
 
 void execute(char* commands[], bool isForeground) {
 	pid_t pid = fork();
 	if(pid == 0) {
+		_handleRedirection(commands);
+		if(!isForeground)
+			close(STDIN_FILENO);
 		execvp(commands[0], commands);
 	}
 	else if(isForeground){
