@@ -16,5 +16,6 @@ void execute(char* commands[], bool isForeground);
 char** parseArgv(char* s);
 
 char** _parseCommand(char buffer[]);
+bool isBackground(char* commands[]);
 
 char** readPrompt();
