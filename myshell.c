@@ -1,5 +1,6 @@
 /* Author: 문준오
- * TODO: 
+ * TODO: PIPE 터짐
+ * 		비정상 입력 이후 ctrl-D 누를시 한번에 종료 안됨
  */
 #include "myshell.h"
 
@@ -62,21 +63,20 @@ char** parseArgv(char* s) {
 
 	if(token == NULL)
 		return NULL;
-	else {
-		while(token) {
-			*it++ = token;
-			if((p = strchr(token, ';')) != NULL) {
-				*p = 0;
-				if(IS_SAME(token, ""))
-					--it;
-				*it++ = 0;
-				break;
-			}
-			token = strtok(NULL, " ");
+
+	while(token) {
+		*it++ = token;
+		if((p = strchr(token, ';')) != NULL) {
+			*p = 0;
+			if(IS_SAME(token, ""))
+				--it;
+			*it++ = 0;
+			break;
 		}
-		*it = 0;
-		return commands;
+		token = strtok(NULL, " ");
 	}
+	*it = 0;
+	return commands;
 }
 
 char** readPrompt() {
@@ -89,10 +89,62 @@ char** readPrompt() {
 	return feof(stdin) ? NULL :  _parseCommand(buffer);
 }
 
-void pullItem(char** dst, char** src) {
-	while( (*dst++ = *src++) ) {
-		/* Do nothing */;
+void _execute(char* commands[], int infd, int outfd, bool isForeground) {
+	int fd[2];
+	char** pipeToken = _findPipeToken(commands);
+
+	pipe(fd);
+
+
+	if(pipeToken){
+		*pipeToken = '\0';
 	}
+
+	pid_t pid = fork();
+
+	if(pid == 0) {
+		/* Child process */
+		close(fd[Read]);
+
+		_handleRedirection(commands);
+
+		if(!isForeground)
+			close(STDIN_FILENO);
+
+		dup2(infd, STDIN_FILENO);
+
+		if(pipeToken)
+			dup2(fd[Write], STDOUT_FILENO);
+
+		execvp(commands[0], commands);
+	}
+	else if (!isForeground) {
+		/* Background child process */
+		int status = 0;
+		waitpid(pid, &status, 0);
+	}
+	else {
+		/* Parent process */
+		close(fd[Write]);
+
+		if(pipeToken) {
+			_execute(pipeToken + 1, fd[Read], outfd, isForeground);
+		}
+		int status = 0;
+		waitpid(pid, &status, 0);
+	}
+}
+
+void execute(char* commands[], bool isForeground) {
+	_execute(commands, STDIN_FILENO, STDOUT_FILENO, isForeground);
+}
+
+char** _findPipeToken(char* iterator[]) {
+	for(; *iterator; ++iterator) {
+		if(strchr(*iterator, '|'))
+			return iterator;
+	}
+	return NULL;
 }
 
 void _handleRedirection(char* commands[]) {
@@ -106,19 +158,19 @@ void _handleRedirection(char* commands[]) {
 		if(IS_SAME(*it, "2>")){
 			newfd = STDERR_FILENO;
 			oldfd = creat(it[1], S_IRUSR|S_IWUSR);
-			pullItem(it, it + 2);
+			_pullItem(it, it + 2);
 			--it;
 		}
 		else if(*p == '>') {
 			newfd = STDOUT_FILENO;
 			oldfd = creat(it[1], S_IRUSR|S_IWUSR);
-			pullItem(it, it + 2);
+			_pullItem(it, it + 2);
 			--it;
 		}
 		else if(*p == '<') {
 			newfd = STDIN_FILENO;
 			oldfd = open(it[1], O_RDONLY, S_IRUSR|S_IWUSR);
-			pullItem(it, it + 2);
+			_pullItem(it, it + 2);
 			--it;
 		}
 		else assert(0 && "Invalid token");
@@ -126,17 +178,9 @@ void _handleRedirection(char* commands[]) {
 	}
 }
 
-void execute(char* commands[], bool isForeground) {
-	pid_t pid = fork();
-	if(pid == 0) {
-		_handleRedirection(commands);
-		if(!isForeground)
-			close(STDIN_FILENO);
-		execvp(commands[0], commands);
-	}
-	else if(isForeground){
-		int status = 0;
-		waitpid(pid, &status, 0);
+void _pullItem(char** dst, char** src) {
+	while( (*dst++ = *src++) ) {
+		/* Do nothing */;
 	}
 }
 
