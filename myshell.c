@@ -1,16 +1,11 @@
 /* Author: 문준오
- * TODO: PIPE 터짐
- * 		비정상 입력 이후 ctrl-D 누를시 한번에 종료 안됨
+ * TODO: 
  */
 #include "myshell.h"
 
 
-void handler(int signum) {
-	fprintf(stderr, "sigchld was raised from pid %d\n", getpid());
-}
 
 int main(int argc, char* argv[]) {
-	signal(SIGCHLD, handler);
 
 	if(argc >= 2) {
 		if(argc >= 3 && IS_SAME(argv[1], "-c")) {
@@ -116,13 +111,12 @@ void _execute(char* commands[], int infd, int outfd, bool isForeground) {
 		_handleRedirection(commands);
 
 		dup2(infd, STDIN_FILENO);
-		close(fd[0]);
-		close(fd[1]);
 
 		if(pipeToken)
 			dup2(fd[Write], STDOUT_FILENO);
 
 		execvp(commands[0], commands);
+		exit(0);
 	}
 	else if (!isForeground) {
 		/* Background child process */
@@ -143,7 +137,8 @@ void _execute(char* commands[], int infd, int outfd, bool isForeground) {
 		fprintf(stderr, "%d is terminated\n", p);
 #endif
 
-		close(fd[Read]);
+		close(fd[0]);
+		close(fd[1]);
 	}
 }
 
