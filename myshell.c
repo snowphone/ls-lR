@@ -4,7 +4,14 @@
  */
 #include "myshell.h"
 
+
+void handler(int signum) {
+	fprintf(stderr, "sigchld was raised from pid %d\n", getpid());
+}
+
 int main(int argc, char* argv[]) {
+	signal(SIGCHLD, handler);
+
 	if(argc >= 2) {
 		if(argc >= 3 && IS_SAME(argv[1], "-c")) {
 			char** commands = parseArgv(argv[2]);
@@ -95,7 +102,6 @@ void _execute(char* commands[], int infd, int outfd, bool isForeground) {
 
 	pipe(fd);
 
-
 	if(pipeToken){
 		*pipeToken = '\0';
 	}
@@ -103,15 +109,15 @@ void _execute(char* commands[], int infd, int outfd, bool isForeground) {
 	pid_t pid = fork();
 
 	if(pid == 0) {
+#ifdef debug
+		fprintf(stderr, "PID: %d\n", getpid());
+#endif
 		/* Child process */
-		close(fd[Read]);
-
 		_handleRedirection(commands);
 
-		if(!isForeground)
-			close(STDIN_FILENO);
-
 		dup2(infd, STDIN_FILENO);
+		close(fd[0]);
+		close(fd[1]);
 
 		if(pipeToken)
 			dup2(fd[Write], STDOUT_FILENO);
@@ -120,8 +126,7 @@ void _execute(char* commands[], int infd, int outfd, bool isForeground) {
 	}
 	else if (!isForeground) {
 		/* Background child process */
-		int status = 0;
-		waitpid(pid, &status, 0);
+		/* Do nothing */;
 	}
 	else {
 		/* Parent process */
@@ -130,8 +135,15 @@ void _execute(char* commands[], int infd, int outfd, bool isForeground) {
 		if(pipeToken) {
 			_execute(pipeToken + 1, fd[Read], outfd, isForeground);
 		}
+
 		int status = 0;
-		waitpid(pid, &status, 0);
+		int p;
+		p = waitpid(pid, &status, 0);
+#ifdef debug
+		fprintf(stderr, "%d is terminated\n", p);
+#endif
+
+		close(fd[Read]);
 	}
 }
 

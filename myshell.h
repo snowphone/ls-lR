@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <signal.h>
 
 #include <unistd.h>
 #include <sys/types.h>
