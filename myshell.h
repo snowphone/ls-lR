@@ -14,16 +14,20 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <pwd.h>
 
 
-#define IS_SAME(X,Y) (strcmp((X), (Y)) == 0)
 
 enum {
 	Read = 0,
 	Write = 1,
 };
 
-bool isEmpty(const char* str) {
+static bool equals(const char* lhs, const char* rhs) {
+	return 0 == strcmp(lhs, rhs);
+}
+
+static bool isEmpty(const char* str) {
 	for(; *str; ++str) {
 		if(!isspace(*str))
 			return false;
@@ -41,4 +45,5 @@ char** _parseCommand(char buffer[]);
 char** _findPipeToken(char* iterator[]);
 bool isBackground(char* commands[]);
 
+void handleCwd(char* commands[]);
 char** readPrompt();

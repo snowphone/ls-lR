@@ -8,7 +8,7 @@
 int main(int argc, char* argv[]) {
 
 	if(argc >= 2) {
-		if(argc >= 3 && IS_SAME(argv[1], "-c")) {
+		if(argc >= 3 && equals(argv[1], "-c")) {
 			char** commands = parseArgv(argv[2]);
 			while(commands) {
 				execute(commands, true);
@@ -22,8 +22,9 @@ int main(int argc, char* argv[]) {
 		char** commands = readPrompt();
 		if(commands == NULL)
 			break;
-		if(IS_SAME(commands[0], "exit"))
+		if(equals(commands[0], "exit"))
 			goto exit_normal;
+		handleCwd(commands);
 		if(isBackground(commands)){
 			execute(commands, false);
 		}
@@ -36,11 +37,20 @@ exit_normal:
 	return 0;
 }
 
+void handleCwd(char* commands[]){
+	if(equals(commands[0], "cd")){
+		if(!commands[1])
+			chdir(getenv("HOME"));
+		else
+			chdir(commands[1]);
+	}
+}
+
 
 bool isBackground(char* commands[]) {
 	char** tokenIt;
 	for(tokenIt = commands; *tokenIt; ++tokenIt) {
-		if(IS_SAME(*tokenIt, "&")) {
+		if(equals(*tokenIt, "&")) {
 			*tokenIt = 0;
 			return true;
 		}
@@ -70,7 +80,7 @@ char** parseArgv(char* s) {
 		*it++ = token;
 		if((p = strchr(token, ';')) != NULL) {
 			*p = 0;
-			if(IS_SAME(token, ""))
+			if(equals(token, ""))
 				--it;
 			*it++ = 0;
 			break;
@@ -104,9 +114,6 @@ void _execute(char* commands[], int infd, int outfd, bool isForeground) {
 	pid_t pid = fork();
 
 	if(pid == 0) {
-#ifdef debug
-		fprintf(stderr, "PID: %d\n", getpid());
-#endif
 		/* Child process */
 		_handleRedirection(commands);
 
@@ -133,9 +140,6 @@ void _execute(char* commands[], int infd, int outfd, bool isForeground) {
 		int status = 0;
 		int p;
 		p = waitpid(pid, &status, 0);
-#ifdef debug
-		fprintf(stderr, "%d is terminated\n", p);
-#endif
 
 		close(fd[0]);
 		close(fd[1]);
@@ -162,7 +166,7 @@ void _handleRedirection(char* commands[]) {
 		if(!p) p = strchr(*it, '<');
 		if(!p) continue;
 
-		if(IS_SAME(*it, "2>")){
+		if(equals(*it, "2>")){
 			newfd = STDERR_FILENO;
 			oldfd = creat(it[1], S_IRUSR|S_IWUSR);
 			_pullItem(it, it + 2);
